@@ -134,6 +134,16 @@ if (bot) {
 
         const progressMsg = await bot.sendMessage(chatId, '⏳ Скачиваю файл...');
         
+        let loadingDots = 0;
+        let actionInterval = setInterval(() => {
+            loadingDots = (loadingDots + 1) % 4;
+            const dots = '.'.repeat(loadingDots);
+            bot.editMessageText(`⏳ Скачиваю файл${dots}`, {
+                chat_id: chatId, message_id: progressMsg.message_id
+            }).catch(() => {});
+            bot.sendChatAction(chatId, 'typing').catch(() => {});
+        }, 1500);
+
         const tmpDir = os.tmpdir();
         const inputExt = path.extname(session.fileName) || '.tmp';
         const inputPath = path.join(tmpDir, `${sid}_in${inputExt}`);
@@ -151,10 +161,22 @@ if (bot) {
                 writer.on('error', reject);
             });
 
+            clearInterval(actionInterval);
+
             // 2. Конвертация
-            await bot.editMessageText(`⚙️ Конвертирую в ${targetFormat.toUpperCase()}...\nЭто может занять время.`, {
+            loadingDots = 0;
+            await bot.editMessageText(`⚙️ Конвертирую в ${targetFormat.toUpperCase()}...`, {
                 chat_id: chatId, message_id: progressMsg.message_id
-            });
+            }).catch(() => {});
+
+            actionInterval = setInterval(() => {
+                loadingDots = (loadingDots + 1) % 4;
+                const dots = '.'.repeat(loadingDots);
+                bot.editMessageText(`⚙️ Конвертирую в ${targetFormat.toUpperCase()}${dots}\nЭто может занять время.`, {
+                    chat_id: chatId, message_id: progressMsg.message_id
+                }).catch(() => {});
+                bot.sendChatAction(chatId, 'record_video').catch(() => {});
+            }, 1500);
 
             await new Promise((resolve, reject) => {
                  let command = ffmpeg(inputPath).toFormat(targetFormat);
@@ -171,7 +193,10 @@ if (bot) {
                         .save(outputPath);
             });
 
+            clearInterval(actionInterval);
+
             // 3. Отправка
+            bot.sendChatAction(chatId, 'upload_document').catch(() => {});
             await bot.editMessageText('✅ Готово! Отправляю файл...', {
                 chat_id: chatId, message_id: progressMsg.message_id
             });
@@ -184,6 +209,7 @@ if (bot) {
             bot.sendMessage(chatId, `❌ Произошла ошибка: ${err.message}`);
             bot.deleteMessage(chatId, progressMsg.message_id).catch(() => {});
         } finally {
+            clearInterval(actionInterval);
             // 4. Очистка
             sessions.delete(sid);
             try { if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath); } catch (e) {}
