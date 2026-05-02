@@ -40,10 +40,17 @@ if (bot) {
         const chatId = msg.chat.id;
 
         if (msg.text === '/start' || msg.text === '/help') {
-            return bot.sendMessage(
-                chatId, 
-                'Привет! Отправь мне видео, аудио или изображение, и я предложу форматы для конвертации 🪄\n\nОграничение размера: 20 МБ (лимит Telegram).'
-            );
+            const welcomeText = `👋 *Привет! Я — бот-конвертер файлов.*
+
+Отправь мне файл (видео, аудио, картинку или голосовое), и я помогу изменить его формат 🪄
+
+*Поддерживаемые форматы:*
+🎬 *Видео:* MP4, AVI, MOV, WEBM, MKV, FLV, WMV
+🎵 *Аудио:* MP3, WAV, OGG, M4A, FLAC, AAC, WMA
+🖼 *Изображения:* JPG, PNG, WEBP, BMP, TIFF, ICO
+
+⚠️ Ограничение размера: *20 МБ* (лимит Telegram).`;
+            return bot.sendMessage(chatId, welcomeText, { parse_mode: 'Markdown' });
         }
 
         let file = null, fileType = null, defaultName = 'file';
@@ -85,25 +92,49 @@ if (bot) {
         let isMedia = false;
 
         // Предлагаем форматы в зависимости от типа расширения
-        if (fileType === 'video' || defaultName.match(/\.(mp4|avi|mov|webm|mkv)$/i)) {
+        if (fileType === 'video' || defaultName.match(/\.(mp4|avi|mov|webm|mkv|flv|wmv)$/i)) {
             inline_keyboard = [
-                [{ text: '➡️ MP3 (Извлечь аудио)', callback_data: `conv:${sid}:mp3` }],
-                [{ text: '➡️ GIF', callback_data: `conv:${sid}:gif` }],
-                [{ text: '➡️ MP4', callback_data: `conv:${sid}:mp4` }]
+                [
+                    { text: '🎬 MP4', callback_data: `conv:${sid}:mp4` },
+                    { text: '🎬 AVI', callback_data: `conv:${sid}:avi` },
+                    { text: '🎬 MKV', callback_data: `conv:${sid}:mkv` }
+                ],
+                [
+                    { text: '🎬 WEBM', callback_data: `conv:${sid}:webm` },
+                    { text: '🎬 MOV', callback_data: `conv:${sid}:mov` },
+                    { text: '🎞 GIF', callback_data: `conv:${sid}:gif` }
+                ],
+                [
+                    { text: '🎵 Извлечь MP3', callback_data: `conv:${sid}:mp3` }
+                ]
             ];
             isMedia = true;
-        } else if (fileType === 'audio' || fileType === 'voice' || defaultName.match(/\.(mp3|wav|ogg|m4a|flac)$/i)) {
+        } else if (fileType === 'audio' || fileType === 'voice' || defaultName.match(/\.(mp3|wav|ogg|m4a|flac|aac|wma)$/i)) {
             inline_keyboard = [
-                [{ text: '➡️ MP3', callback_data: `conv:${sid}:mp3` }],
-                [{ text: '➡️ WAV', callback_data: `conv:${sid}:wav` }],
-                [{ text: '➡️ OGG', callback_data: `conv:${sid}:ogg` }]
+                [
+                    { text: '🎵 MP3', callback_data: `conv:${sid}:mp3` },
+                    { text: '🎵 WAV', callback_data: `conv:${sid}:wav` },
+                    { text: '🎵 OGG', callback_data: `conv:${sid}:ogg` }
+                ],
+                [
+                    { text: '🎵 M4A', callback_data: `conv:${sid}:m4a` },
+                    { text: '🎵 FLAC', callback_data: `conv:${sid}:flac` },
+                    { text: '🎵 AAC', callback_data: `conv:${sid}:aac` }
+                ]
             ];
             isMedia = true;
-        } else if (fileType === 'photo' || defaultName.match(/\.(jpg|jpeg|png|webp|bmp)$/i)) {
+        } else if (fileType === 'photo' || defaultName.match(/\.(jpg|jpeg|png|webp|bmp|tiff|tif|ico)$/i)) {
             inline_keyboard = [
-                [{ text: '➡️ JPG', callback_data: `conv:${sid}:jpg` }],
-                [{ text: '➡️ PNG', callback_data: `conv:${sid}:png` }],
-                [{ text: '➡️ WEBP', callback_data: `conv:${sid}:webp` }]
+                [
+                    { text: '🖼 JPG', callback_data: `conv:${sid}:jpg` },
+                    { text: '🖼 PNG', callback_data: `conv:${sid}:png` },
+                    { text: '🖼 WEBP', callback_data: `conv:${sid}:webp` }
+                ],
+                [
+                    { text: '🖼 BMP', callback_data: `conv:${sid}:bmp` },
+                    { text: '🖼 TIFF', callback_data: `conv:${sid}:tiff` },
+                    { text: '🖼 ICO', callback_data: `conv:${sid}:ico` }
+                ]
             ];
             isMedia = true;
         }
@@ -164,19 +195,15 @@ if (bot) {
             clearInterval(actionInterval);
 
             // 2. Конвертация
-            loadingDots = 0;
             await bot.editMessageText(`⚙️ Конвертирую в ${targetFormat.toUpperCase()}...`, {
                 chat_id: chatId, message_id: progressMsg.message_id
             }).catch(() => {});
 
+            let lastProgressUpdate = 0;
+            
             actionInterval = setInterval(() => {
-                loadingDots = (loadingDots + 1) % 4;
-                const dots = '.'.repeat(loadingDots);
-                bot.editMessageText(`⚙️ Конвертирую в ${targetFormat.toUpperCase()}${dots}\nЭто может занять время.`, {
-                    chat_id: chatId, message_id: progressMsg.message_id
-                }).catch(() => {});
                 bot.sendChatAction(chatId, 'record_video').catch(() => {});
-            }, 1500);
+            }, 3000);
 
             await new Promise((resolve, reject) => {
                  let command = ffmpeg(inputPath).toFormat(targetFormat);
@@ -188,9 +215,26 @@ if (bot) {
                      command = command.videoCodec('libx264');
                  }
 
-                 command.on('end', resolve)
-                        .on('error', reject)
-                        .save(outputPath);
+                 command.on('progress', (progress) => {
+                     if (progress.percent && !isNaN(progress.percent)) {
+                         const percent = Math.min(Math.max(Math.round(progress.percent), 0), 100);
+                         const now = Date.now();
+                         // Обновляем сообщение раз в 2 секунды, чтобы не попасть под rate limit (Too Many Requests)
+                         if (now - lastProgressUpdate > 2000) {
+                             lastProgressUpdate = now;
+                             const filledChars = Math.round(percent / 10);
+                             const emptyChars = Math.max(0, 10 - filledChars);
+                             const bar = '█'.repeat(filledChars) + '░'.repeat(emptyChars);
+                             
+                             bot.editMessageText(`⚙️ Конвертирую в ${targetFormat.toUpperCase()}...\n\n${bar} ${percent}%`, {
+                                 chat_id: chatId, message_id: progressMsg.message_id
+                             }).catch(() => {});
+                         }
+                     }
+                 })
+                 .on('end', resolve)
+                 .on('error', reject)
+                 .save(outputPath);
             });
 
             clearInterval(actionInterval);
