@@ -329,11 +329,30 @@ bot.catch((err) => {
 });
 
 // --- ЗАПУСК БОТА ---
-bot.start({
-    onStart: (botInfo) => {
-        console.log(`🤖 Бот @${botInfo.username} успешно запущен!`);
+const startBot = async () => {
+    try {
+        // Удаляем вебхуки на всякий случай перед запуском polling
+        await bot.api.deleteWebhook({ drop_pending_updates: true }).catch(() => {});
+        console.log('Подключение к Telegram API...');
+        await bot.start({
+            drop_pending_updates: true, // Игнорируем старые апдейты, если бот лежал
+            onStart: (botInfo) => {
+                console.log(`🤖 Бот @${botInfo.username} успешно запущен!`);
+            }
+        });
+    } catch (err) {
+        // Ошибка 409 означает, что Render еще не успел убить старый процесс при деплое
+        if (err.description && err.description.includes('409') || err.error_code === 409) {
+            console.log('⚠️ Конфликт поллинга (409). Старый процесс еще завершается. Пробуем снова через 5 секунд...');
+            setTimeout(startBot, 5000);
+        } else {
+            console.error('❌ Ошибка при запуске:', err);
+            process.exit(1);
+        }
     }
-});
+};
+
+startBot();
 
 // --- ПРАВИЛЬНОЕ ЗАВЕРШЕНИЕ (Graceful Shutdown) ---
 const shutdown = async (signal) => {
